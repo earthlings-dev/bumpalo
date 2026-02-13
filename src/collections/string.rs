@@ -52,9 +52,9 @@
 //! assert_eq!(bytes, [240, 159, 146, 150]);
 //! ```
 
+use crate::Bump;
 use crate::collections::str::lossy;
 use crate::collections::vec::Vec;
-use crate::Bump;
 use core::borrow::{Borrow, BorrowMut};
 use core::char::decode_utf16;
 use core::fmt;
@@ -768,8 +768,10 @@ impl<'bump> String<'bump> {
         capacity: usize,
         bump: &'bump Bump,
     ) -> String<'bump> {
-        String {
-            vec: Vec::from_raw_parts_in(buf, length, capacity, bump),
+        unsafe {
+            String {
+                vec: Vec::from_raw_parts_in(buf, length, capacity, bump),
+            }
         }
     }
 
@@ -869,7 +871,7 @@ impl<'bump> String<'bump> {
     pub fn into_bump_str(self) -> &'bump str {
         let s = unsafe {
             let s = self.as_str();
-            mem::transmute(s)
+            mem::transmute::<&str, &str>(s)
         };
         mem::forget(self);
         s
@@ -1213,7 +1215,7 @@ impl<'bump> String<'bump> {
     /// ```
     #[inline]
     pub fn pop(&mut self) -> Option<char> {
-        let ch = self.chars().rev().next()?;
+        let ch = self.chars().next_back()?;
         let newlen = self.len() - ch.len_utf8();
         unsafe {
             self.vec.set_len(newlen);
@@ -1386,17 +1388,19 @@ impl<'bump> String<'bump> {
     }
 
     unsafe fn insert_bytes(&mut self, idx: usize, bytes: &[u8]) {
-        let len = self.len();
-        let amt = bytes.len();
-        self.vec.reserve(amt);
+        unsafe {
+            let len = self.len();
+            let amt = bytes.len();
+            self.vec.reserve(amt);
 
-        ptr::copy(
-            self.vec.as_ptr().add(idx),
-            self.vec.as_mut_ptr().add(idx + amt),
-            len - idx,
-        );
-        ptr::copy(bytes.as_ptr(), self.vec.as_mut_ptr().add(idx), amt);
-        self.vec.set_len(len + amt);
+            ptr::copy(
+                self.vec.as_ptr().add(idx),
+                self.vec.as_mut_ptr().add(idx + amt),
+                len - idx,
+            );
+            ptr::copy(bytes.as_ptr(), self.vec.as_mut_ptr().add(idx), amt);
+            self.vec.set_len(len + amt);
+        }
     }
 
     /// Inserts a string slice into this `String` at a byte position.
@@ -1949,7 +1953,7 @@ impl<'bump> hash::Hash for String<'bump> {
 /// let b = " world";
 /// let c = String::from_str_in(a, &bump) + b;
 /// ```
-impl<'a, 'bump> Add<&'a str> for String<'bump> {
+impl<'bump> Add<&str> for String<'bump> {
     type Output = String<'bump>;
 
     #[inline]
@@ -2039,7 +2043,7 @@ impl<'bump> ops::IndexMut<ops::RangeFrom<usize>> for String<'bump> {
 impl<'bump> ops::IndexMut<ops::RangeFull> for String<'bump> {
     #[inline]
     fn index_mut(&mut self, _index: ops::RangeFull) -> &mut str {
-        unsafe { str::from_utf8_unchecked_mut(&mut *self.vec) }
+        unsafe { str::from_utf8_unchecked_mut(&mut self.vec) }
     }
 }
 impl<'bump> ops::IndexMut<ops::RangeInclusive<usize>> for String<'bump> {
@@ -2067,7 +2071,7 @@ impl<'bump> ops::Deref for String<'bump> {
 impl<'bump> ops::DerefMut for String<'bump> {
     #[inline]
     fn deref_mut(&mut self) -> &mut str {
-        unsafe { str::from_utf8_unchecked_mut(&mut *self.vec) }
+        unsafe { str::from_utf8_unchecked_mut(&mut self.vec) }
     }
 }
 
@@ -2185,7 +2189,7 @@ mod serialize {
         where
             S: Serializer,
         {
-            serializer.serialize_str(&self)
+            serializer.serialize_str(self)
         }
     }
 }

@@ -1,5 +1,5 @@
 use bumpalo::{AllocOrInitError, Bump};
-use rand::Rng;
+use rand::RngExt;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -49,19 +49,19 @@ unsafe impl GlobalAlloc for Allocator {
         if self.is_returning_null() {
             core::ptr::null_mut()
         } else {
-            System.alloc(layout)
+            unsafe { System.alloc(layout) }
         }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        System.dealloc(ptr, layout);
+        unsafe { System.dealloc(ptr, layout) };
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         if self.is_returning_null() {
             core::ptr::null_mut()
         } else {
-            System.realloc(ptr, layout, new_size)
+            unsafe { System.realloc(ptr, layout, new_size) }
         }
     }
 }
@@ -141,10 +141,10 @@ fn main() {
                 let layout = Layout::from_size_align(bump.chunk_capacity(), 1).unwrap();
                 assert!(bump.try_alloc_layout(layout).is_ok());
 
-                let mut rng = rand::thread_rng();
+                let mut rng = rand::rng();
 
                 for _ in 0..NUM_TESTS {
-                    if rng.gen() {
+                    if rng.random() {
                         GLOBAL_ALLOCATOR.toggle_returning_null();
                     }
 

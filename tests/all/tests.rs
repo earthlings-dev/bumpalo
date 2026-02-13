@@ -2,7 +2,6 @@ use bumpalo::Bump;
 use std::alloc::Layout;
 use std::fmt::Debug;
 use std::mem;
-use std::usize;
 
 #[test]
 fn can_iterate_over_allocated_things() {
@@ -22,10 +21,7 @@ fn can_iterate_over_allocated_things() {
         assert_eq!(*this, i);
         let this = this as *const _ as usize;
 
-        if match last {
-            Some(last) if last - mem::size_of::<u64>() == this => false,
-            _ => true,
-        } {
+        if !matches!(last, Some(last) if last - mem::size_of::<u64>() == this) {
             let chunk_end = this + mem::size_of::<u64>();
             println!("new chunk ending @ 0x{:x}", chunk_end);
             assert!(

@@ -1,7 +1,7 @@
+use crate::Bump;
 #[cfg(feature = "boxed")]
 use crate::boxed::Box;
 use crate::collections::{String, Vec};
-use crate::Bump;
 
 /// A trait for types that support being constructed from an iterator, parameterized by an allocator.
 pub trait FromIteratorIn<A> {

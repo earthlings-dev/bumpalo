@@ -88,8 +88,8 @@
 //! [`vec!`]: ../../macro.vec.html
 
 use super::raw_vec::RawVec;
-use crate::collections::CollectionAllocErr;
 use crate::Bump;
+use crate::collections::CollectionAllocErr;
 use core::borrow::{Borrow, BorrowMut};
 use core::cmp::Ordering;
 use core::fmt;
@@ -107,7 +107,7 @@ use core::slice;
 use std::io;
 
 unsafe fn arith_offset<T>(p: *const T, offset: isize) -> *const T {
-    p.offset(offset)
+    unsafe { p.offset(offset) }
 }
 
 fn partition_dedup_by<T, F>(s: &mut [T], mut same_bucket: F) -> (&mut [T], &mut [T])
@@ -188,7 +188,7 @@ where
             if !same_bucket(&mut *ptr_read, &mut *prev_ptr_write) {
                 if next_read != next_write {
                     let ptr_write = prev_ptr_write.offset(1);
-                    mem::swap(&mut *ptr_read, &mut *ptr_write);
+                    core::ptr::swap(ptr_read, ptr_write);
                 }
                 next_write += 1;
             }
@@ -204,7 +204,7 @@ where
     T: Sized,
 {
     let pointee_size = mem::size_of::<T>();
-    assert!(0 < pointee_size && pointee_size <= isize::max_value() as usize);
+    assert!(0 < pointee_size && pointee_size <= isize::MAX as usize);
 
     // This is the same sequence that Clang emits for pointer subtraction.
     // It can be neither `nsw` nor `nuw` because the input is treated as
@@ -670,9 +670,11 @@ impl<'bump, T: 'bump> Vec<'bump, T> {
         capacity: usize,
         bump: &'bump Bump,
     ) -> Vec<'bump, T> {
-        Vec {
-            buf: RawVec::from_raw_parts_in(ptr, capacity, bump),
-            len: length,
+        unsafe {
+            Vec {
+                buf: RawVec::from_raw_parts_in(ptr, capacity, bump),
+                len: length,
+            }
         }
     }
 
@@ -1438,20 +1440,21 @@ impl<'bump, T: 'bump> Vec<'bump, T> {
     /// - self.len()      == old(self).len() + 1,
     /// - self.capacity() == old(self).capacity(),
     /// - forall|i: usize| implies(
-    ///       i < old(self).len(),
-    ///       self.get_unchecked(i) == old(self).get_unchecked(i)
-    ///   )
+    ///   i < old(self).len(),
+    ///   self.get_unchecked(i) == old(self).get_unchecked(i))
     #[allow(clippy::inline_always)]
     #[inline(always)]
     unsafe fn push_unchecked(&mut self, value: T) {
-        debug_assert!(self.len() < self.capacity());
+        unsafe {
+            debug_assert!(self.len() < self.capacity());
 
-        // Divergence from verified impl:
-        //   Verified implementation has special handling for ZSTs
-        //   as ZSTs do not play nicely with separation logic.
-        ptr::write(self.buf.ptr().add(self.len), value);
+            // Divergence from verified impl:
+            //   Verified implementation has special handling for ZSTs
+            //   as ZSTs do not play nicely with separation logic.
+            ptr::write(self.buf.ptr().add(self.len), value);
 
-        self.len = self.len + 1;
+            self.len += 1;
+        }
     }
 
     /// Appends an element to the back of a vector.
@@ -1531,11 +1534,7 @@ impl<'bump, T: 'bump> Vec<'bump, T> {
     #[inline]
     pub fn pop_if(&mut self, predicate: impl FnOnce(&mut T) -> bool) -> Option<T> {
         let last = self.last_mut()?;
-        if predicate(last) {
-            self.pop()
-        } else {
-            None
-        }
+        if predicate(last) { self.pop() } else { None }
     }
 
     /// Moves all the elements of `other` into `Self`, leaving `other` empty.
@@ -1568,11 +1567,13 @@ impl<'bump, T: 'bump> Vec<'bump, T> {
     /// Appends elements to `Self` from other buffer.
     #[inline]
     unsafe fn append_elements(&mut self, other: *const [T]) {
-        let count = (&(*other)).len();
-        self.reserve(count);
-        let len = self.len();
-        ptr::copy_nonoverlapping(other as *const T, self.as_mut_ptr().add(len), count);
-        self.len += count;
+        unsafe {
+            let count = (&(*other)).len();
+            self.reserve(count);
+            let len = self.len();
+            ptr::copy_nonoverlapping(other as *const T, self.as_mut_ptr().add(len), count);
+            self.len += count;
+        }
     }
 
     /// Creates a draining iterator that removes the specified range in the vector
@@ -1832,97 +1833,97 @@ impl<'bump, T: 'bump + Clone> Vec<'bump, T> {
     /// # Postconditions
     ///
     /// - forall|i: usize| implies(
-    ///       i < old(self).len(),
-    ///       self.get_unchecked(i) == old(self).get_unchecked(i)
-    ///   ),
+    ///   i < old(self).len(),
+    ///   self.get_unchecked(i) == old(self).get_unchecked(i)),
     /// - forall|i: usize| implies(
-    ///       i < slice.len(),
-    ///       self.get_unchecked((old(self).len() + i) as usize)
-    ///           == clone(slice.get_unchecked(i))
-    ///   ),
+    ///   i < slice.len(),
+    ///   self.get_unchecked((old(self).len() + i) as usize)
+    ///   == clone(slice.get_unchecked(i))),
     /// - self.len()      == old(self).len() + slice.len(),
     /// - self.capacity() == old(self).capacity(),
     #[inline]
     unsafe fn extend_from_slice_unchecked(&mut self, slice: &[T]) {
-        // Guaranteed never to overflow for non ZSTs
-        //   size_of::<T>() <= isize::MAX - (isize::MAX % align_of::<T>()))
-        //   isize::MAX + isize::MAX < usize::MAX
-        debug_assert!(
-            core::mem::size_of::<T>() == 0 || self.capacity() >= self.len() + slice.len()
-        );
-        debug_assert!(
-            // is_zst::<T>() ==> capacity >= slen + slice.len()
-            core::mem::size_of::<T>() != 0
+        unsafe {
+            // Guaranteed never to overflow for non ZSTs
+            //   size_of::<T>() <= isize::MAX - (isize::MAX % align_of::<T>()))
+            //   isize::MAX + isize::MAX < usize::MAX
+            debug_assert!(
+                core::mem::size_of::<T>() == 0 || self.capacity() >= self.len() + slice.len()
+            );
+            debug_assert!(
+                // is_zst::<T>() ==> capacity >= slen + slice.len()
+                core::mem::size_of::<T>() != 0
             // Capacity is usize::MAX for ZSTs
             || self.len() <= usize::MAX - slice.len()
-        );
+            );
 
-        let mut pos = 0usize;
+            let mut pos = 0usize;
 
-        loop
-        /*
-        invariants
-            pos <= slice.len(),
-            self.len() + (slice.len() - pos) <= old(self).capacity(),
-            old(self).capacity() == self.capacity(),
+            loop
+            /*
+            invariants
+                pos <= slice.len(),
+                self.len() + (slice.len() - pos) <= old(self).capacity(),
+                old(self).capacity() == self.capacity(),
 
-            self.len() == old(self).len() + pos,
+                self.len() == old(self).len() + pos,
 
-            forall|i: usize| implies(
-                i < old(self).len(),
-                self.get_unchecked(i) == old(self).get_unchecked(i)
-            ),
-            forall|i: usize| implies(
-                i < pos,
-                self.get_unchecked((old(self).len() + i) as usize)
-                    == clone(slice.get_unchecked(i))
-            )
-        */
-        {
-            if pos == slice.len() {
+                forall|i: usize| implies(
+                    i < old(self).len(),
+                    self.get_unchecked(i) == old(self).get_unchecked(i)
+                ),
+                forall|i: usize| implies(
+                    i < pos,
+                    self.get_unchecked((old(self).len() + i) as usize)
+                        == clone(slice.get_unchecked(i))
+                )
+            */
+            {
+                if pos == slice.len() {
+                    /*
+                    pos = slice.len(),
+                    self.len() = old(self).len() + slice.len(),
+
+                    forall|i: usize| i < slice.len() implies {
+                        self.get_unchecked((old(self).len() + i) as usize)
+                            == clone(slice.get_unchecked(i))
+                    }
+                    by {
+                        i < pos
+                    }
+                    */
+                    return;
+                }
+
                 /*
-                pos = slice.len(),
-                self.len() = old(self).len() + slice.len(),
+                pos < slice.len(),
+                self.len() < self.capacity()
+                */
 
-                forall|i: usize| i < slice.len() implies {
+                let elem = slice.get_unchecked(pos);
+                self.push_unchecked(elem.clone());
+
+                /*
+                ghost prev_pos = pos
+                */
+
+                pos += 1;
+
+                /*
+                forall|i: usize| i < pos implies {
                     self.get_unchecked((old(self).len() + i) as usize)
                         == clone(slice.get_unchecked(i))
                 }
                 by {
-                    i < pos
+                    if i < pos - 1 {
+                        // By invariant
+                    }
+                    else {
+                        i == prev_pos
+                    }
                 }
                 */
-                return;
             }
-
-            /*
-            pos < slice.len(),
-            self.len() < self.capacity()
-            */
-
-            let elem = slice.get_unchecked(pos);
-            self.push_unchecked(elem.clone());
-
-            /*
-            ghost prev_pos = pos
-            */
-
-            pos = pos + 1;
-
-            /*
-            forall|i: usize| i < pos implies {
-                self.get_unchecked((old(self).len() + i) as usize)
-                    == clone(slice.get_unchecked(i))
-            }
-            by {
-                if i < pos - 1 {
-                    // By invariant
-                }
-                else {
-                    i == prev_pos
-                }
-            }
-            */
         }
     }
 
@@ -2648,7 +2649,7 @@ impl<'bump, T: 'bump> Iterator for IntoIter<'bump, T> {
     #[inline]
     fn next(&mut self) -> Option<T> {
         unsafe {
-            if self.ptr as *const _ == self.end {
+            if std::ptr::eq(self.ptr, self.end) {
                 None
             } else if mem::size_of::<T>() == 0 {
                 // purposefully don't use 'ptr.offset' because for
@@ -2870,34 +2871,40 @@ impl<'a, 'bump, T> Drain<'a, 'bump, T> {
     /// Fill that range as much as possible with new elements from the `replace_with` iterator.
     /// Return whether we filled the entire range. (`replace_with.next()` didn’t return `None`.)
     unsafe fn fill<I: Iterator<Item = T>>(&mut self, replace_with: &mut I) -> bool {
-        let vec = self.vec.as_mut();
-        let range_start = vec.len;
-        let range_end = self.tail_start;
-        let range_slice =
-            slice::from_raw_parts_mut(vec.as_mut_ptr().add(range_start), range_end - range_start);
+        unsafe {
+            let vec = self.vec.as_mut();
+            let range_start = vec.len;
+            let range_end = self.tail_start;
+            let range_slice = slice::from_raw_parts_mut(
+                vec.as_mut_ptr().add(range_start),
+                range_end - range_start,
+            );
 
-        for place in range_slice {
-            if let Some(new_item) = replace_with.next() {
-                ptr::write(place, new_item);
-                vec.len += 1;
-            } else {
-                return false;
+            for place in range_slice {
+                if let Some(new_item) = replace_with.next() {
+                    ptr::write(place, new_item);
+                    vec.len += 1;
+                } else {
+                    return false;
+                }
             }
+            true
         }
-        true
     }
 
     /// Make room for inserting more elements before the tail.
     unsafe fn move_tail(&mut self, extra_capacity: usize) {
-        let vec = self.vec.as_mut();
-        let used_capacity = self.tail_start + self.tail_len;
-        vec.buf.reserve(used_capacity, extra_capacity);
+        unsafe {
+            let vec = self.vec.as_mut();
+            let used_capacity = self.tail_start + self.tail_len;
+            vec.buf.reserve(used_capacity, extra_capacity);
 
-        let new_tail_start = self.tail_start + extra_capacity;
-        let src = vec.as_ptr().add(self.tail_start);
-        let dst = vec.as_mut_ptr().add(new_tail_start);
-        ptr::copy(src, dst, self.tail_len);
-        self.tail_start = new_tail_start;
+            let new_tail_start = self.tail_start + extra_capacity;
+            let src = vec.as_ptr().add(self.tail_start);
+            let dst = vec.as_mut_ptr().add(new_tail_start);
+            ptr::copy(src, dst, self.tail_len);
+            self.tail_start = new_tail_start;
+        }
     }
 }
 
@@ -2984,7 +2991,7 @@ impl<'bump> io::Write for Vec<'bump, u8> {
 mod serialize {
     use super::*;
 
-    use serde::{ser::SerializeSeq, Serialize, Serializer};
+    use serde::{Serialize, Serializer, ser::SerializeSeq};
 
     impl<'a, T> Serialize for Vec<'a, T>
     where

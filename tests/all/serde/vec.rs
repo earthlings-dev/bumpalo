@@ -1,8 +1,8 @@
 #![cfg(all(feature = "collections", feature = "serde"))]
 
-use super::{assert_eq_json, Mixed, Test};
+use super::{Mixed, Test, assert_eq_json};
 
-use bumpalo::{vec, Bump};
+use bumpalo::{Bump, vec};
 
 macro_rules! compare_std_vec {
     (in $bump:ident; $($x:expr),+) => {{
@@ -25,7 +25,8 @@ fn test_vec_serializes_str() {
 #[test]
 fn test_vec_serializes_f32() {
     let bump = Bump::new();
-    let (vec, std_vec) = compare_std_vec![in bump; 1.5707964, 3.1415927];
+    let (vec, std_vec) =
+        compare_std_vec![in bump; std::f32::consts::FRAC_PI_2, std::f32::consts::PI];
     assert_eq_json!(vec, std_vec);
     let de: std::vec::Vec<f32> =
         serde_json::from_str(&serde_json::to_string(&vec).unwrap()).unwrap();

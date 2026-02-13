@@ -234,7 +234,7 @@ impl<'a, T: ?Sized> Box<'a, T> {
     /// ```
     #[inline]
     pub unsafe fn from_raw(raw: *mut T) -> Self {
-        Box(&mut *raw)
+        unsafe { Box(&mut *raw) }
     }
 
     /// Consumes the `Box`, returning a wrapped raw pointer.
@@ -362,10 +362,6 @@ impl<'a, 'b, T: ?Sized + PartialEq> PartialEq<Box<'b, T>> for Box<'a, T> {
     #[inline]
     fn eq(&self, other: &Box<'b, T>) -> bool {
         PartialEq::eq(&**self, &**other)
-    }
-    #[inline]
-    fn ne(&self, other: &Box<'b, T>) -> bool {
-        PartialEq::ne(&**self, &**other)
     }
 }
 
@@ -627,25 +623,25 @@ impl<'a, A> Box<'a, [A]> {
 
 impl<'a, T: ?Sized> borrow::Borrow<T> for Box<'a, T> {
     fn borrow(&self) -> &T {
-        &**self
+        self
     }
 }
 
 impl<'a, T: ?Sized> borrow::BorrowMut<T> for Box<'a, T> {
     fn borrow_mut(&mut self) -> &mut T {
-        &mut **self
+        self
     }
 }
 
 impl<'a, T: ?Sized> AsRef<T> for Box<'a, T> {
     fn as_ref(&self) -> &T {
-        &**self
+        self
     }
 }
 
 impl<'a, T: ?Sized> AsMut<T> for Box<'a, T> {
     fn as_mut(&mut self) -> &mut T {
-        &mut **self
+        self
     }
 }
 

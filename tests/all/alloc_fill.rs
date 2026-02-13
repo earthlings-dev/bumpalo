@@ -1,7 +1,6 @@
 use bumpalo::Bump;
 use std::alloc::Layout;
 use std::cmp;
-use std::iter::repeat;
 use std::mem;
 
 #[test]
@@ -38,7 +37,7 @@ fn alloc_slice_fill_zero() {
 #[test]
 fn alloc_slice_try_fill_with_succeeds() {
     let b = Bump::new();
-    let res: Result<&mut [usize], ()> = b.alloc_slice_try_fill_with(100, |n| Ok(n));
+    let res: Result<&mut [usize], ()> = b.alloc_slice_try_fill_with(100, Ok);
     assert_eq!(res.map(|arr| arr[50]), Ok(50));
 }
 
@@ -53,7 +52,7 @@ fn alloc_slice_try_fill_with_fails() {
 #[test]
 fn alloc_slice_try_fill_iter_succeeds() {
     let b = Bump::new();
-    let elems = repeat(42).take(10).collect::<Vec<_>>();
+    let elems = std::iter::repeat_n(42, 10).collect::<Vec<_>>();
     let res: Result<&mut [u16], ()> = b.alloc_slice_try_fill_iter(elems.into_iter().map(Ok));
     assert_eq!(res.map(|arr| arr[5]), Ok(42));
 }
@@ -61,7 +60,7 @@ fn alloc_slice_try_fill_iter_succeeds() {
 #[test]
 fn alloc_slice_try_fill_iter_fails() {
     let b = Bump::new();
-    let elems = repeat(()).take(10).collect::<Vec<_>>();
+    let elems = std::iter::repeat_n((), 10).collect::<Vec<_>>();
     let res: Result<&mut [u16], ()> = b.alloc_slice_try_fill_iter(elems.into_iter().map(Err));
     assert_eq!(res, Err(()));
 }
@@ -71,5 +70,5 @@ fn alloc_slice_try_fill_iter_fails() {
 fn alloc_slice_overflow() {
     let b = Bump::new();
 
-    b.alloc_slice_fill_default::<u64>(usize::max_value());
+    b.alloc_slice_fill_default::<u64>(usize::MAX);
 }

@@ -3,13 +3,13 @@ authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 categories = ["memory-management", "rust-patterns", "no-std"]
 description = "A fast bump allocation arena for Rust."
 documentation = "https://docs.rs/bumpalo"
-edition = "2021"
+edition = "2024"
 exclude = ["/.github/*", "/benches", "/tests", "valgrind.supp", "bumpalo.png"]
 license = "MIT OR Apache-2.0"
 name = "bumpalo"
 readme = "README.md"
 repository = "https://github.com/fitzgen/bumpalo"
-rust-version = "1.71.1"
+rust-version = "1.93.0"
 version = "3.19.1"
 
 [package.metadata.docs.rs]
@@ -40,22 +40,22 @@ harness = false
 # This dependency provides a version of the unstable nightly Rust `Allocator`
 # trait on stable Rust. Enabling this feature means that `bumpalo` will
 # implement its `Allocator` trait.
-allocator-api2 = { version = "0.2.8", default-features = false, optional = true }
+allocator-api2 = { version = "0.4.0", default-features = false, optional = true }
 
 # This dependency is here to allow integration with Serde, if the `serde` feature is enabled
-serde = { version = "1.0.171", optional = true }
+serde = { version = "1.0.228", optional = true }
 
 [dev-dependencies]
-quickcheck = "1.0.3"
-criterion = "0.3.6"
-rand = "0.8.5"
-serde = { version = "1.0.197", features = ["derive"] }
-serde_json = "1.0.115"
+quickcheck = "1.1.0"
+criterion = "0.8.2"
+rand = "0.10.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 blink-alloc = { version = "=0.4.0" }
 
 # Make sure that criterion pulls in a rayon that supports our MSRV.
-rayon = { version = "=1.10.0" }
-rayon-core = { version = "=1.12.1" }
+rayon = { version = "=1.11.0" }
+rayon-core = { version = "=1.13.0" }
 
 [features]
 default = []
@@ -70,3 +70,13 @@ bench_allocator_api = ["allocator_api", "blink-alloc/nightly"]
 
 # [profile.bench]
 # debug = true
+
+[patch.crates-io]
+serde = { path = "../serde/serde" }
+serde_core = { path = "../serde/serde_core" }
+serde_derive = { path = "../serde/serde_derive" }
+serde_json = { path = "../json" }
+rand = { path = "../rand" }
+# rayon-rs fork not yet migrated to edition 2024 (unsafe_op_in_unsafe_fn violations)
+# rayon = { path = "../rayon-rs" }
+# rayon-core = { path = "../rayon-rs/rayon-core" }

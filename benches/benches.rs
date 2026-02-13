@@ -1,10 +1,9 @@
+use std::hint::black_box;
+
 use criterion::*;
 
-#[derive(Default)]
-struct Small(u8);
-
-#[derive(Default)]
-struct Big([usize; 32]);
+type Small = u8;
+type Big = [usize; 32];
 
 fn alloc<T: Default>(n: usize) {
     let arena = bumpalo::Bump::with_capacity(n * std::mem::size_of::<T>());
@@ -84,48 +83,48 @@ fn try_alloc_try_with_err<T, E: Default>(n: usize) {
 
 #[cfg(feature = "collections")]
 fn format_realloc(bump: &bumpalo::Bump, n: usize) {
-    let n = criterion::black_box(n);
+    let n = black_box(n);
     let s = bumpalo::format!(in bump, "Hello {:.*}", n, "World! ");
-    criterion::black_box(s);
+    black_box(s);
 }
 
 #[cfg(feature = "collections")]
 fn string_from_str_in(bump: &bumpalo::Bump, str: &str) {
-    let str = criterion::black_box(str);
+    let str = black_box(str);
     let s = bumpalo::collections::string::String::from_str_in(str, bump);
-    criterion::black_box(s);
+    black_box(s);
 }
 
 #[cfg(feature = "collections")]
 fn string_push_str(bump: &bumpalo::Bump, str: &str) {
-    let str = criterion::black_box(str);
+    let str = black_box(str);
     let mut s = bumpalo::collections::string::String::with_capacity_in(str.len(), bump);
     s.push_str(str);
-    criterion::black_box(s);
+    black_box(s);
 }
 
 #[cfg(feature = "collections")]
 fn extend_u8(bump: &bumpalo::Bump, slice: &[u8]) {
-    let slice = criterion::black_box(slice);
+    let slice = black_box(slice);
     let mut vec = bumpalo::collections::Vec::<u8>::with_capacity_in(slice.len(), bump);
     vec.extend(slice.iter().copied());
-    criterion::black_box(vec);
+    black_box(vec);
 }
 
 #[cfg(feature = "collections")]
 fn extend_from_slice_u8(bump: &bumpalo::Bump, slice: &[u8]) {
-    let slice = criterion::black_box(slice);
+    let slice = black_box(slice);
     let mut vec = bumpalo::collections::Vec::<u8>::with_capacity_in(slice.len(), bump);
     vec.extend_from_slice(slice);
-    criterion::black_box(vec);
+    black_box(vec);
 }
 
 #[cfg(feature = "collections")]
 fn extend_from_slice_copy_u8(bump: &bumpalo::Bump, slice: &[u8]) {
-    let slice = criterion::black_box(slice);
+    let slice = black_box(slice);
     let mut vec = bumpalo::collections::Vec::<u8>::with_capacity_in(slice.len(), bump);
     vec.extend_from_slice_copy(slice);
-    criterion::black_box(vec);
+    black_box(vec);
 }
 
 const ALLOCATIONS: usize = 10_000;
@@ -371,7 +370,7 @@ fn bench_string_from_str_in(c: &mut Criterion) {
         let str = "x".repeat(len);
         b.iter(|| {
             bump.reset();
-            string_from_str_in(&bump, &*str);
+            string_from_str_in(&bump, &str);
         });
     });
 }
@@ -386,7 +385,7 @@ fn bench_string_push_str(c: &mut Criterion) {
         let str = "x".repeat(len);
         b.iter(|| {
             bump.reset();
-            string_push_str(&bump, &*str);
+            string_push_str(&bump, &str);
         });
     });
 }

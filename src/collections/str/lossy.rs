@@ -25,9 +25,7 @@ impl<'a> Utf8Lossy<'a> {
     }
 
     pub fn chunks(&self) -> Utf8LossyChunksIter<'a> {
-        Utf8LossyChunksIter {
-            source: &self.bytes,
-        }
+        Utf8LossyChunksIter { source: self.bytes }
     }
 }
 
@@ -60,11 +58,7 @@ impl<'a> Iterator for Utf8LossyChunksIter<'a> {
             unsafe { *xs.get_unchecked(i) }
         }
         fn safe_get(xs: &[u8], i: usize) -> u8 {
-            if i >= xs.len() {
-                0
-            } else {
-                unsafe_get(xs, i)
-            }
+            if i >= xs.len() { 0 } else { unsafe_get(xs, i) }
         }
 
         let mut i = 0;

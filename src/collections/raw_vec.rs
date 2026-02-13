@@ -17,7 +17,7 @@ use core::cmp;
 use core::mem;
 use core::ptr::{self, NonNull};
 
-use crate::alloc::{handle_alloc_error, Alloc, Layout, UnstableLayoutMethods};
+use crate::alloc::{Alloc, Layout, UnstableLayoutMethods, handle_alloc_error};
 use crate::collections::CollectionAllocErr;
 use crate::collections::CollectionAllocErr::*;
 // use boxed::Box;
@@ -122,10 +122,12 @@ impl<'a, T> RawVec<'a, T> {
     /// capacity cannot exceed `isize::MAX` (only a concern on 32-bit systems).
     /// If the ptr and capacity come from a RawVec created via `a`, then this is guaranteed.
     pub unsafe fn from_raw_parts_in(ptr: *mut T, cap: usize, a: &'a Bump) -> Self {
-        RawVec {
-            ptr: NonNull::new_unchecked(ptr),
-            cap,
-            a,
+        unsafe {
+            RawVec {
+                ptr: NonNull::new_unchecked(ptr),
+                cap,
+                a,
+            }
         }
     }
 }
@@ -562,13 +564,15 @@ impl<'a, T> RawVec<'a, T> {
     /// the rules around uninitialized boxed values are not finalized yet,
     /// but until they are, it is advisable to avoid them.
     pub unsafe fn into_box(self) -> crate::boxed::Box<'a, [T]> {
-        use crate::boxed::Box;
+        unsafe {
+            use crate::boxed::Box;
 
-        // NOTE: not calling `cap()` here; actually using the real `cap` field!
-        let slice = core::slice::from_raw_parts_mut(self.ptr(), self.cap);
-        let output: Box<'a, [T]> = Box::from_raw(slice);
-        mem::forget(self);
-        output
+            // NOTE: not calling `cap()` here; actually using the real `cap` field!
+            let slice = core::slice::from_raw_parts_mut(self.ptr(), self.cap);
+            let output: Box<'a, [T]> = Box::from_raw(slice);
+            mem::forget(self);
+            output
+        }
     }
 }
 
@@ -699,9 +703,11 @@ impl<'a, T> RawVec<'a, T> {
 impl<'a, T> RawVec<'a, T> {
     /// Frees the memory owned by the RawVec *without* trying to Drop its contents.
     pub unsafe fn dealloc_buffer(&mut self) {
-        let elem_size = mem::size_of::<T>();
-        if elem_size != 0 {
-            if let Some(layout) = self.current_layout() {
+        unsafe {
+            let elem_size = mem::size_of::<T>();
+            if elem_size != 0
+                && let Some(layout) = self.current_layout()
+            {
                 self.a.dealloc(self.ptr.cast(), layout);
             }
         }
@@ -728,7 +734,7 @@ impl<'a, T> Drop for RawVec<'a, T> {
 
 #[inline]
 fn alloc_guard(alloc_size: usize) -> Result<(), CollectionAllocErr> {
-    if mem::size_of::<usize>() < 8 && alloc_size > ::core::isize::MAX as usize {
+    if mem::size_of::<usize>() < 8 && alloc_size > isize::MAX as usize {
         Err(CapacityOverflow)
     } else {
         Ok(())

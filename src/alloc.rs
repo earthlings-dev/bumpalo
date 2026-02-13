@@ -18,7 +18,6 @@ use core::cmp;
 use core::fmt;
 use core::mem;
 use core::ptr::{self, NonNull};
-use core::usize;
 
 pub use core::alloc::{Layout, LayoutErr};
 
@@ -200,7 +199,7 @@ impl fmt::Display for CannotReallocInPlace {
 ///    currently allocated via an allocator `a`, then it is legal to
 ///    use that layout to deallocate it, i.e. `a.dealloc(ptr, k);`.
 ///
-/// # Unsafety
+/// # Safety
 ///
 /// The `Alloc` trait is an `unsafe` trait for a number of reasons, and
 /// implementors must ensure that they adhere to these contracts:
@@ -215,7 +214,6 @@ impl fmt::Display for CannotReallocInPlace {
 ///
 /// Note that this list may get tweaked over time as clarifications are made in
 /// the future.
-// #[unstable(feature = "allocator_api", issue = "32838")]
 pub unsafe trait Alloc {
     // (Note: some existing allocators have unspecified but well-defined
     // behavior in response to a zero size allocation request ;
@@ -379,26 +377,32 @@ pub unsafe trait Alloc {
         layout: Layout,
         new_size: usize,
     ) -> Result<NonNull<u8>, AllocErr> {
-        let old_size = layout.size();
+        unsafe {
+            let old_size = layout.size();
 
-        if new_size >= old_size {
-            if let Ok(()) = self.grow_in_place(ptr, layout, new_size) {
+            if new_size >= old_size {
+                if let Ok(()) = self.grow_in_place(ptr, layout, new_size) {
+                    return Ok(ptr);
+                }
+            } else if new_size < old_size
+                && let Ok(()) = self.shrink_in_place(ptr, layout, new_size)
+            {
                 return Ok(ptr);
             }
-        } else if new_size < old_size {
-            if let Ok(()) = self.shrink_in_place(ptr, layout, new_size) {
-                return Ok(ptr);
-            }
-        }
 
-        // otherwise, fall back on alloc + copy + dealloc.
-        let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
-        let result = self.alloc(new_layout);
-        if let Ok(new_ptr) = result {
-            ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), cmp::min(old_size, new_size));
-            self.dealloc(ptr, layout);
+            // otherwise, fall back on alloc + copy + dealloc.
+            let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+            let result = self.alloc(new_layout);
+            if let Ok(new_ptr) = result {
+                ptr::copy_nonoverlapping(
+                    ptr.as_ptr(),
+                    new_ptr.as_ptr(),
+                    cmp::min(old_size, new_size),
+                );
+                self.dealloc(ptr, layout);
+            }
+            result
         }
-        result
     }
 
     /// Behaves like `alloc`, but also ensures that the contents
@@ -420,12 +424,14 @@ pub unsafe trait Alloc {
     ///
     /// [`handle_alloc_error`]: ../../alloc/alloc/fn.handle_alloc_error.html
     unsafe fn alloc_zeroed(&mut self, layout: Layout) -> Result<NonNull<u8>, AllocErr> {
-        let size = layout.size();
-        let p = self.alloc(layout);
-        if let Ok(p) = p {
-            ptr::write_bytes(p.as_ptr(), 0, size);
+        unsafe {
+            let size = layout.size();
+            let p = self.alloc(layout);
+            if let Ok(p) = p {
+                ptr::write_bytes(p.as_ptr(), 0, size);
+            }
+            p
         }
-        p
     }
 
     /// Behaves like `alloc`, but also returns the whole size of
@@ -448,8 +454,10 @@ pub unsafe trait Alloc {
     ///
     /// [`handle_alloc_error`]: ../../alloc/alloc/fn.handle_alloc_error.html
     unsafe fn alloc_excess(&mut self, layout: Layout) -> Result<Excess, AllocErr> {
-        let usable_size = self.usable_size(&layout);
-        self.alloc(layout).map(|p| Excess(p, usable_size.1))
+        unsafe {
+            let usable_size = self.usable_size(&layout);
+            self.alloc(layout).map(|p| Excess(p, usable_size.1))
+        }
     }
 
     /// Behaves like `realloc`, but also returns the whole size of
@@ -477,10 +485,12 @@ pub unsafe trait Alloc {
         layout: Layout,
         new_size: usize,
     ) -> Result<Excess, AllocErr> {
-        let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
-        let usable_size = self.usable_size(&new_layout);
-        self.realloc(ptr, layout, new_size)
-            .map(|p| Excess(p, usable_size.1))
+        unsafe {
+            let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+            let usable_size = self.usable_size(&new_layout);
+            self.realloc(ptr, layout, new_size)
+                .map(|p| Excess(p, usable_size.1))
+        }
     }
 
     /// Attempts to extend the allocation referenced by `ptr` to fit `new_size`.
@@ -658,9 +668,11 @@ pub unsafe trait Alloc {
     where
         Self: Sized,
     {
-        let k = Layout::new::<T>();
-        if k.size() > 0 {
-            self.dealloc(ptr.cast(), k);
+        unsafe {
+            let k = Layout::new::<T>();
+            if k.size() > 0 {
+                self.dealloc(ptr.cast(), k);
+            }
         }
     }
 
@@ -749,13 +761,15 @@ pub unsafe trait Alloc {
     where
         Self: Sized,
     {
-        match (Layout::array::<T>(n_old), Layout::array::<T>(n_new)) {
-            (Ok(ref k_old), Ok(ref k_new)) if k_old.size() > 0 && k_new.size() > 0 => {
-                debug_assert!(k_old.align() == k_new.align());
-                self.realloc(ptr.cast(), *k_old, k_new.size())
-                    .map(NonNull::cast)
+        unsafe {
+            match (Layout::array::<T>(n_old), Layout::array::<T>(n_new)) {
+                (Ok(ref k_old), Ok(ref k_new)) if k_old.size() > 0 && k_new.size() > 0 => {
+                    debug_assert!(k_old.align() == k_new.align());
+                    self.realloc(ptr.cast(), *k_old, k_new.size())
+                        .map(NonNull::cast)
+                }
+                _ => Err(AllocErr),
             }
-            _ => Err(AllocErr),
         }
     }
 
@@ -783,12 +797,14 @@ pub unsafe trait Alloc {
     where
         Self: Sized,
     {
-        match Layout::array::<T>(n) {
-            Ok(k) if k.size() > 0 => {
-                self.dealloc(ptr.cast(), k);
-                Ok(())
+        unsafe {
+            match Layout::array::<T>(n) {
+                Ok(k) if k.size() > 0 => {
+                    self.dealloc(ptr.cast(), k);
+                    Ok(())
+                }
+                _ => Err(AllocErr),
             }
-            _ => Err(AllocErr),
         }
     }
 }

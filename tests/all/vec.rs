@@ -1,7 +1,7 @@
 #![cfg(feature = "collections")]
 
 use crate::quickcheck;
-use bumpalo::{collections::Vec, vec, Bump};
+use bumpalo::{Bump, collections::Vec, vec};
 use std::cell::{Cell, RefCell};
 use std::ops::Deref;
 

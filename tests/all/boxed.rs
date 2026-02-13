@@ -1,7 +1,7 @@
 #![cfg(feature = "boxed")]
 
-use bumpalo::boxed::Box;
 use bumpalo::Bump;
+use bumpalo::boxed::Box;
 
 #[test]
 fn into_raw_aliasing() {

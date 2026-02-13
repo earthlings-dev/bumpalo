@@ -21,9 +21,10 @@ fn try_alloc_try_with_large_array() -> Result<(), AllocOrInitError<()>> {
 fn try_alloc_try_with_large_array_err() {
     let b = Bump::new();
 
-    assert!(b
-        .try_alloc_try_with(|| Result::<[u8; 10_000_000], _>::Err(()))
-        .is_err());
+    assert!(
+        b.try_alloc_try_with(|| Result::<[u8; 10_000_000], _>::Err(()))
+            .is_err()
+    );
 }
 
 #[allow(dead_code)]
@@ -56,9 +57,10 @@ fn try_alloc_try_with_large_struct() -> Result<(), AllocOrInitError<()>> {
 fn try_alloc_try_with_large_struct_err() {
     let b = Bump::new();
 
-    assert!(b
-        .try_alloc_try_with(|| Result::<LargeStruct, _>::Err(()))
-        .is_err());
+    assert!(
+        b.try_alloc_try_with(|| Result::<LargeStruct, _>::Err(()))
+            .is_err()
+    );
 }
 
 #[test]
@@ -86,11 +88,13 @@ fn try_alloc_try_with_large_tuple() -> Result<(), AllocOrInitError<()>> {
 fn try_alloc_try_with_large_tuple_err() {
     let b = Bump::new();
 
-    assert!(b
-        .try_alloc_try_with(|| { Result::<(u32, LargeStruct), _>::Err(()) })
-        .is_err());
+    assert!(
+        b.try_alloc_try_with(|| { Result::<(u32, LargeStruct), _>::Err(()) })
+            .is_err()
+    );
 }
 
+#[allow(clippy::large_enum_variant)]
 enum LargeEnum {
     Small,
     #[allow(dead_code)]
@@ -112,7 +116,8 @@ fn try_alloc_try_with_large_enum() -> Result<(), AllocOrInitError<()>> {
 fn try_alloc_try_with_large_enum_err() {
     let b = Bump::new();
 
-    assert!(b
-        .try_alloc_try_with(|| Result::<LargeEnum, _>::Err(()))
-        .is_err());
+    assert!(
+        b.try_alloc_try_with(|| Result::<LargeEnum, _>::Err(()))
+            .is_err()
+    );
 }
