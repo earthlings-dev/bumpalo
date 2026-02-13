@@ -72,10 +72,10 @@ bench_allocator_api = ["allocator_api", "blink-alloc/nightly"]
 # debug = true
 
 [patch.crates-io]
-serde = { path = "../serde/serde" }
-serde_core = { path = "../serde/serde_core" }
-serde_derive = { path = "../serde/serde_derive" }
-serde_json = { path = "../json" }
-rand = { path = "../rand" }
-rayon = { path = "../rayon-rs" }
-rayon-core = { path = "../rayon-rs/rayon-core" }
+serde = { git = "https://github.com/earthlings-dev/serde.git" }
+serde_core = { git = "https://github.com/earthlings-dev/serde.git" }
+serde_derive = { git = "https://github.com/earthlings-dev/serde.git" }
+serde_json = { git = "https://github.com/earthlings-dev/json.git" }
+rand = { git = "https://github.com/earthlings-dev/rand.git" }
+rayon = { git = "https://github.com/earthlings-dev/rayon-rs.git" }
+rayon-core = { git = "https://github.com/earthlings-dev/rayon-rs.git" }
