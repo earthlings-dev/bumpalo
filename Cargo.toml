@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 name = "bumpalo"
 readme = "README.md"
 repository = "https://github.com/fitzgen/bumpalo"
-rust-version = "1.93.0"
+rust-version = "1.93"
 version = "3.19.1"
 
 [package.metadata.docs.rs]
