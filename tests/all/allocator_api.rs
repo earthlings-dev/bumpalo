@@ -60,14 +60,16 @@ impl AllocatorDebug {
 unsafe impl Allocator for AllocatorDebug {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         self.allocs.fetch_add(1, Relaxed);
-        let ref bump = self.bump;
+        let bump = &self.bump;
         bump.allocate(layout)
     }
 
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        self.deallocs.fetch_add(1, Relaxed);
-        let ref bump = self.bump;
-        bump.deallocate(ptr, layout)
+        unsafe {
+            self.deallocs.fetch_add(1, Relaxed);
+            let bump = &self.bump;
+            bump.deallocate(ptr, layout)
+        }
     }
 
     unsafe fn shrink(
@@ -76,9 +78,11 @@ unsafe impl Allocator for AllocatorDebug {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        self.shrinks.fetch_add(1, Relaxed);
-        let ref bump = self.bump;
-        bump.shrink(ptr, old_layout, new_layout)
+        unsafe {
+            self.shrinks.fetch_add(1, Relaxed);
+            let bump = &self.bump;
+            bump.shrink(ptr, old_layout, new_layout)
+        }
     }
 
     unsafe fn grow(
@@ -87,9 +91,11 @@ unsafe impl Allocator for AllocatorDebug {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        self.grows.fetch_add(1, Relaxed);
-        let ref bump = self.bump;
-        bump.grow(ptr, old_layout, new_layout)
+        unsafe {
+            self.grows.fetch_add(1, Relaxed);
+            let bump = &self.bump;
+            bump.grow(ptr, old_layout, new_layout)
+        }
     }
 }
 
@@ -124,7 +130,7 @@ fn allocator_api_push_a_bunch_of_items() {
 #[test]
 fn allocator_grow_zeroed() {
     // Create a new bump arena.
-    let ref bump = Bump::new();
+    let bump = &Bump::new();
 
     // Make an initial allocation.
     let first_layout = Layout::from_size_align(4, 4).expect("create a layout");
@@ -197,10 +203,7 @@ quickcheck! {
             for new_layout in layout_iter {
                 let res = unsafe { b.shrink(pointer.cast(), old_layout, new_layout) };
                 if old_layout.align() < new_layout.align() {
-                    match res {
-                        Ok(p) => assert!(is_pointer_aligned_to(p, new_layout.align())),
-                        Err(_) => {}
-                    }
+                    if let Ok(p) = res { assert!(is_pointer_aligned_to(p, new_layout.align())) }
                 } else {
                     pointer = res.unwrap();
                     assert!(is_pointer_aligned_to(pointer, new_layout.align()));
@@ -260,9 +263,8 @@ fn allocator_shrink_layout_change() {
 
     // This could either happen to succeed because `p4` already happened to be
     // 16-aligned and could be reused, or `bumpalo` could return an error.
-    match p16_res {
-        Ok(p16) => assert!(is_pointer_aligned_to(p16, 16)),
-        Err(_) => {}
+    if let Ok(p16) = p16_res {
+        assert!(is_pointer_aligned_to(p16, 16))
     }
 }
 

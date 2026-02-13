@@ -6,6 +6,7 @@
 #![feature(allocator_api)]
 
 use criterion::*;
+use std::hint::black_box;
 use std::{
     alloc::{AllocError, Allocator, Layout},
     cell::RefCell,
@@ -76,7 +77,7 @@ impl BumpAllocator for SystemAlloc {
     }
 }
 
-unsafe impl<'a> Allocator for &'a SystemAlloc {
+unsafe impl Allocator for &SystemAlloc {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         let ptr = self.alloc.allocate(layout)?;
 
@@ -87,9 +88,11 @@ unsafe impl<'a> Allocator for &'a SystemAlloc {
     }
 
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        self.alloc.deallocate(ptr, layout);
-        let mut live = self.live.borrow_mut();
-        live.remove(&ptr);
+        unsafe {
+            self.alloc.deallocate(ptr, layout);
+            let mut live = self.live.borrow_mut();
+            live.remove(&ptr);
+        }
     }
 
     fn allocate_zeroed(&self, _layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
@@ -102,17 +105,19 @@ unsafe impl<'a> Allocator for &'a SystemAlloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        {
+        unsafe {
+            {
+                let mut live = self.live.borrow_mut();
+                live.remove(&ptr);
+            }
+
+            let ptr = self.alloc.grow(ptr, old_layout, new_layout)?;
+
             let mut live = self.live.borrow_mut();
-            live.remove(&ptr);
+            live.insert(ptr.cast(), new_layout);
+
+            Ok(ptr)
         }
-
-        let ptr = self.alloc.grow(ptr, old_layout, new_layout)?;
-
-        let mut live = self.live.borrow_mut();
-        live.insert(ptr.cast(), new_layout);
-
-        Ok(ptr)
     }
 
     unsafe fn grow_zeroed(
@@ -130,17 +135,19 @@ unsafe impl<'a> Allocator for &'a SystemAlloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        {
+        unsafe {
+            {
+                let mut live = self.live.borrow_mut();
+                live.remove(&ptr);
+            }
+
+            let ptr = self.alloc.shrink(ptr, old_layout, new_layout)?;
+
             let mut live = self.live.borrow_mut();
-            live.remove(&ptr);
+            live.insert(ptr.cast(), new_layout);
+
+            Ok(ptr)
         }
-
-        let ptr = self.alloc.shrink(ptr, old_layout, new_layout)?;
-
-        let mut live = self.live.borrow_mut();
-        live.insert(ptr.cast(), new_layout);
-
-        Ok(ptr)
     }
 }
 
@@ -359,7 +366,7 @@ where
 {
     let mut group = c.benchmark_group(format!("warm-up/{name}"));
 
-    group.bench_function(format!("first u32 allocation"), |b| {
+    group.bench_function("first u32 allocation".to_string(), |b| {
         b.iter(|| {
             let alloc = A::default();
             let ptr = black_box(&alloc).allocate(Layout::new::<u32>()).unwrap();

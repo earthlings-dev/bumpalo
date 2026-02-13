@@ -2508,7 +2508,7 @@ unsafe impl<const MIN_ALIGN: usize> alloc::Alloc for &Bump<MIN_ALIGN> {
 }
 
 #[cfg(any(feature = "allocator_api", feature = "allocator-api2"))]
-unsafe impl<'a, const MIN_ALIGN: usize> Allocator for &'a Bump<MIN_ALIGN> {
+unsafe impl<const MIN_ALIGN: usize> Allocator for &Bump<MIN_ALIGN> {
     #[inline]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         self.try_alloc_layout(layout)

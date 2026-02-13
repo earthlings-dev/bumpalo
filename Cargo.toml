@@ -77,6 +77,5 @@ serde_core = { path = "../serde/serde_core" }
 serde_derive = { path = "../serde/serde_derive" }
 serde_json = { path = "../json" }
 rand = { path = "../rand" }
-# rayon-rs fork not yet migrated to edition 2024 (unsafe_op_in_unsafe_fn violations)
-# rayon = { path = "../rayon-rs" }
-# rayon-core = { path = "../rayon-rs/rayon-core" }
+rayon = { path = "../rayon-rs" }
+rayon-core = { path = "../rayon-rs/rayon-core" }
